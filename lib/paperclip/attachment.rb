@@ -22,6 +22,8 @@ module Paperclip
         :processors            => [:thumbnail],
         :source_file_options   => {},
         :storage               => :filesystem,
+        :parent_style          => :original,
+        :style_order   	       => [],
         :styles                => {},
         :url                   => "/system/:class/:attachment/:id_partition/:style/:filename",
         :url_generator         => Paperclip::UrlGenerator,
@@ -76,6 +78,9 @@ module Paperclip
       @url_generator         = options[:url_generator].new(self, @options)
       @source_file_options   = options[:source_file_options]
       @whiny                 = options[:whiny]
+
+      @style_order       = options[:style_order]
+      @style_order       = @style_order.call(self) if @style_order.is_a?(Proc)
 
       initialize_storage
     end
@@ -398,7 +403,7 @@ module Paperclip
 
     def post_process_styles(*style_args) #:nodoc:
       post_process_style(:original, styles[:original]) if styles.include?(:original) && process_style?(:original, style_args)
-      styles.reject{ |name, style| name == :original }.each do |name, style|
+      styles_in_order.reject{ |name, style| name == :original }.each do |name, style|
         post_process_style(name, style) if process_style?(name, style_args)
       end
     end
@@ -407,7 +412,12 @@ module Paperclip
       begin
         raise RuntimeError.new("Style #{name} has no processors defined.") if style.processors.blank?
         @queued_for_write[name] = style.processors.inject(@queued_for_write[:original]) do |file, processor|
-          Paperclip.processor(processor).make(file, style.processor_options, self)
+    	  if style[:parent_style]
+    	  	afile = Paperclip.io_adapters.for(@queued_for_write[style[:parent_style]])
+    	  else
+    	  	afile = file
+    	  end
+          Paperclip.processor(processor).make(afile, style.processor_options, self)
         end
         @queued_for_write[name] = Paperclip.io_adapters.for(@queued_for_write[name])
       rescue Paperclip::Error => e
@@ -473,6 +483,10 @@ module Paperclip
     # Check if attachment database table has a created_at field which is not yet set
     def has_enabled_but_unset_created_at?
       able_to_store_created_at? && !instance_read(:created_at)
+    end
+
+    def styles_in_order #:nodoc:
+      @style_order.empty? ? styles : styles.sort_by{|s| @style_order.index(s.first)}
     end
   end
 end
