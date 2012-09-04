@@ -92,7 +92,7 @@ module Paperclip
       trans << "-coalesce" if animated?
       trans << "-auto-orient" if auto_orient
       trans << "-resize" << %["#{scale}"] unless scale.nil? || scale.empty?
-      trans << "-crop" << %["#{crop}"] << "+repage" if crop
+      trans << "-gravity center -crop" << %["#{crop}"] << "+repage" if crop
       trans
     end
 

@@ -139,11 +139,7 @@ module Paperclip
     end
 
     def cropping dst, ratio, scale
-      if ratio.horizontal? || ratio.square?
-        "%dx%d+%d+%d" % [ dst.width, dst.height, 0, (self.height * scale - dst.height) / 2 ]
-      else
-        "%dx%d+%d+%d" % [ dst.width, dst.height, (self.width * scale - dst.width) / 2, 0 ]
-      end
+        "%dx%d+%d+%d" % [ dst.width, dst.height, 0, 0 ]
     end
 
     # scale to the requested geometry and preserve the aspect ratio
