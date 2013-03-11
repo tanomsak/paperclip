@@ -30,11 +30,12 @@ module Paperclip
         :use_default_time_zone => true,
         :use_timestamp         => true,
         :whiny                 => Paperclip.options[:whiny] || Paperclip.options[:whiny_thumbnails]
+
       }
     end
 
     attr_reader :name, :instance, :default_style, :convert_options, :queued_for_write, :whiny,
-                :options, :interpolator, :source_file_options, :whiny
+                :options, :interpolator, :source_file_options, :whiny,  :watermark_path
     attr_accessor :post_processing
 
     # Creates an Attachment object. +name+ is the name of the attachment,
@@ -81,6 +82,7 @@ module Paperclip
 
       @style_order       = options[:style_order]
       @style_order       = @style_order.call(self) if @style_order.is_a?(Proc)
+      @watermark_path    = options[:watermark_path]
 
       initialize_storage
     end
@@ -412,12 +414,30 @@ module Paperclip
       begin
         raise RuntimeError.new("Style #{name} has no processors defined.") if style.processors.blank?
         @queued_for_write[name] = style.processors.inject(@queued_for_write[:original]) do |file, processor|
-    	  if style[:parent_style]
-    	  	afile = Paperclip.io_adapters.for(@queued_for_write[style[:parent_style]])
-    	  else
-    	  	afile = file
-    	  end
-          Paperclip.processor(processor).make(afile, style.processor_options, self)
+      	  if style[:parent_style]
+      	  	afile = Paperclip.io_adapters.for(@queued_for_write[style[:parent_style]])
+      	  else
+      	  	afile = file
+      	  end
+
+          if style.processor_options[:watermark_path]
+              temp_file = Paperclip.processor(processor).make(afile, style.processor_options, self)
+
+              command = <<-end_command
+                -composite -gravity NorthEast -geometry -4+30
+                "#{File.expand_path(temp_file.path) }"
+                #{style.processor_options[:watermark_path]}
+                "#{ File.expand_path(temp_file.path) }"
+              end_command
+
+              Paperclip.run("convert", command.gsub(/\s+/, " "))
+
+              temp_file
+          else
+              Paperclip.processor(processor).make(afile, style.processor_options, self)
+          end
+
+          # Paperclip.processor(processor).make(afile, style.processor_options, self)
         end
         @queued_for_write[name] = Paperclip.io_adapters.for(@queued_for_write[name])
       rescue Paperclip::Error => e
